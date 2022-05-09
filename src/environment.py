@@ -139,7 +139,7 @@ class EmotionEnv(gym.Env):
 
     def _engage(self):
         if self.current_appraisal.resolvable:
-            self.agent_status.current_emo_intensity -= self.engage_benefit
+            self.agent_status.current_emo_intensity = ((self.agent_status.current_emo_intensity ** 2) + (self.agent_status.current_emo_intensity - self.engage_benefit) * (10 - self.agent_status.current_emo_intensity)) / 10
             self.current_appraisal.emo_intensity -= self.engage_adaptation
             self.current_appraisal.reappraisal_counter += 1
         else:

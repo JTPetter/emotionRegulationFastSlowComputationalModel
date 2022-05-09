@@ -31,13 +31,13 @@ logger.setLevel(logging.INFO)
 #Parameters for grid search
 grid_parameters = {
     'N_STIMULI': [300],
-    'STIMULUS_MAX_OCCURRENCE': [5],
+    'STIMULUS_MAX_OCCURRENCE': [7],
     'alpha': [.1],
     'gamma': [.99],
     'epsilon': [1],
-    'disengage_benefit': [2],   
-    'engage_benefit': [2],
-    'engage_adaptation': [2],
+    'disengage_benefit': [.5],
+    'engage_benefit': [.3],
+    'engage_adaptation': [1.5],
     'SEED': [123],
     'PERCENTAGE_RESOLVABLE_STIMULI': [1]    # 0 to 1
 }
