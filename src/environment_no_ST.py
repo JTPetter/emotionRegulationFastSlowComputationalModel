@@ -145,7 +145,7 @@ class EmotionEnv(gym.Env):
         return reward
 
     def _engage(self):
-        self.time_to_reappraise = 1 + (self.agent_status.current_emo_intensity ** self.time_equation_exponent) / (10**self.time_equation_exponent) * 9#(self.agent_status.current_emo_intensity ** self.time_equation_exponent) / (10 ** self.time_equation_exponent) * 10
+        self.time_to_reappraise = 1#(self.agent_status.current_emo_intensity ** self.time_equation_exponent) / (10 ** self.time_equation_exponent) * 10
         if self.current_appraisal.resolvable:
             old_intensity = self.agent_status.current_emo_intensity
             new_intensity = self.current_appraisal.emo_intensity - self.engage_benefit

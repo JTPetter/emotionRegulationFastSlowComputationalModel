@@ -152,15 +152,11 @@ class EmotionEnv(gym.Env):
             new_intensity = np.clip(new_intensity, 0, 10)
             reward = ((10 - old_intensity) * self.time_to_reappraise) + (10 - new_intensity) * (10 - self.time_to_reappraise)
             self.agent_status.current_emo_intensity -= self.engage_benefit
-            self.current_appraisal.emo_intensity -= self.engage_adaptation
-            self.current_appraisal.reappraisal_counter += 1
         else:
-            self.current_appraisal.reappraisal_counter += 1
             old_intensity = self.agent_status.current_emo_intensity
-            new_intensity = self.current_appraisal.emo_intensity - self.engage_adaptation * self.current_appraisal.reappraisal_counter
+            new_intensity = self.current_appraisal.emo_intensity - self.engage_adaptation
             new_intensity = np.clip(new_intensity, 0, 10)
             reward = (10 - old_intensity) * self.time_to_reappraise + (10 - new_intensity) * (10 - self.time_to_reappraise)
-            self.agent_status.current_emo_intensity -= self.current_appraisal.reappraisal_counter * self.engage_adaptation
         self.agent_status.current_emo_intensity = np.clip(self.agent_status.current_emo_intensity, 0, 10)
         self.current_appraisal.emo_intensity = np.clip(self.current_appraisal.emo_intensity, 0, 10)
         return reward

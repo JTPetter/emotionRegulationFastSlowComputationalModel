@@ -30,16 +30,16 @@ logger.setLevel(logging.INFO)
 
 #Parameters for grid search
 grid_parameters = {
-    'N_STIMULI': [300],
-    'STIMULUS_MAX_OCCURRENCE': [7],
+    'N_STIMULI': [800],
+    'STIMULUS_MAX_OCCURRENCE': [5],
     'alpha': [.1],
     'gamma': [.99],
     'epsilon': [1],
-    'disengage_benefit': [.5],
-    'engage_benefit': [.3],
-    'engage_adaptation': [1.5],
-    'SEED': [123],
-    'PERCENTAGE_RESOLVABLE_STIMULI': [1]    # 0 to 1
+    'disengage_benefit': [2],
+    'engage_benefit': [2],
+    'engage_adaptation': [2],
+    'SEED': [12],
+    'PERCENTAGE_RESOLVABLE_STIMULI': [.5]    # 0 to 1
 }
 
 n_grid_parameters = len(grid_parameters)
@@ -57,15 +57,16 @@ grid = grid.reshape(n_grid_parameters, int(grid.size/n_grid_parameters)).T
 for row in np.arange(0, len(grid)):
 
     SEED = int(grid[row, 8])
-    N_RUNS = 60000
+    N_RUNS = 100000
     N_STIMULI = int(grid[row, 0])
-    N_ACTIONS = 3
+    N_ACTIONS = 2
     N_STATES = 3
     STIMULUS_MAX_OCCURRENCE = int(grid[row, 1])
     STIMULUS_INT_MIN = 1
     STIMULUS_INT_MAX = 10
     DECAY_TIME = N_RUNS * .7    # How much of the total run is used for exploring
     PERCENTAGE_RESOLVABLE_STIMULI = grid[row, 9]
+    TIME_EQUATION_EXPONENT = 2
 
     alpha = grid[row, 2]
     gamma = grid[row, 3]
@@ -100,13 +101,14 @@ for row in np.arange(0, len(grid)):
                      engage_adaptation=engage_adaptation,
                      stimulus_max_occurrence=STIMULUS_MAX_OCCURRENCE,
                      stimuli=stimuli_list,
-                     agent_status=agent_status
+                     agent_status=agent_status,
+                     time_equation_exponent=TIME_EQUATION_EXPONENT
                      )
     env.reset()
 
     agent = QTableAgent(N_STATES, n_actions=N_ACTIONS, alpha=alpha, gamma=gamma, epsilon=epsilon)
 
-    action = 0 # the first action
+    action = 1 # the first action
     state = bin_low_high(env.agent_status.current_emo_intensity)    #the first state
 
     # Record actions and rewards
@@ -196,9 +198,10 @@ for row in np.arange(0, len(grid)):
     # Plot choices
     states = np.arange(0, N_STATES)
     #action_cumsum = np.cumsum(action_counts, axis=0)
-    plt.plot(states, action_counts[:, 0], marker='', color='olive', linewidth=2, label='inaction')
-    plt.plot(states, action_counts[:, 1], marker='', color='blue', linewidth=2, label='disengage')
-    plt.plot(states, action_counts[:, 2], marker='', color='red', linewidth=2, label='engage')
+                             #plt.plot(states, action_counts[:, 0], marker='', color='olive', linewidth=2, label='inaction')
+    plt.plot(states, action_counts[:, 0], marker='', color='blue', linewidth=2, label='disengage')
+    plt.plot(states, action_counts[:, 1], marker='', color='red', linewidth=2, label='engage')
+    plt.ylim([0, np.max(action_counts)])
     plt.legend()
     plt.show()
 
@@ -210,16 +213,16 @@ for row in np.arange(0, len(grid)):
 
 
     # plot rewards
-    time = np.arange(0, N_RUNS)
-    inaction_timeline = np.cumsum(reward_counts[:, 0] != 0) + 1
-    disengage_timeline = np.cumsum(reward_counts[:, 1] != 0) + 1
-    engage_timeline = np.cumsum(reward_counts[:, 2] != 0) + 1
-    reward_cumsum = np.cumsum(reward_counts, axis=0)
-    reward_cumsum[:, 0] / np.arange(1, N_RUNS + 1, 1)
-    plt.plot(time, reward_cumsum[:, 0]/inaction_timeline, marker='', color='olive', linewidth=2, label='inaction')
-    plt.plot(time, reward_cumsum[:, 1]/disengage_timeline, marker='', color='blue', linewidth=2, label='disengage')
-    plt.plot(time, reward_cumsum[:, 2]/engage_timeline, marker='', color='red', linewidth=2, label='engage')
-    plt.legend()
+    # time = np.arange(0, N_RUNS)
+    # inaction_timeline = np.cumsum(reward_counts[:, 0] != 0) + 1
+    # disengage_timeline = np.cumsum(reward_counts[:, 1] != 0) + 1
+    # engage_timeline = np.cumsum(reward_counts[:, 2] != 0) + 1
+    # reward_cumsum = np.cumsum(reward_counts, axis=0)
+    # reward_cumsum[:, 0] / np.arange(1, N_RUNS + 1, 1)
+    # #plt.plot(time, reward_cumsum[:, 0]/inaction_timeline, marker='', color='olive', linewidth=2, label='inaction')
+    # plt.plot(time, reward_cumsum[:, 1]/disengage_timeline, marker='', color='blue', linewidth=2, label='disengage')
+    # plt.plot(time, reward_cumsum[:, 2]/engage_timeline, marker='', color='red', linewidth=2, label='engage')
+    # plt.legend()
     #plt.show()
 
 
@@ -240,9 +243,10 @@ for row in np.arange(0, len(grid)):
     # df_parameters.to_csv(file_name0)
     # #
     # #
-    # # #to write the actions to csv
-    # df1 = pd.DataFrame({'inaction': action_counts[:, 0], 'disengage': action_counts[:, 1], 'engage': action_counts[:, 2]})
-    # file_name1 = folder_path + '/' + file_name + '_' + str(row) + '_actionPerIntensity' '.csv'
+    # #to write the actions to csv
+    # df1 = pd.DataFrame({'disengage': action_counts[:, 0], 'engage': action_counts[:, 1]})
+    # #file_name1 = folder_path + '/' + file_name + '_' + str(row) + '_actionPerIntensity' '.csv'
+    # file_name1 = "presentationSimulationNoResolve.csv"
     # df1.to_csv(file_name1)
 
 
