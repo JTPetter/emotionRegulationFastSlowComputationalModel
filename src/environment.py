@@ -100,6 +100,7 @@ class EmotionEnv(gym.Env):
         self.replacement_stimulus_counter = 0
         self.stimulus_max_occurrence = stimulus_max_occurrence
         self.time_to_reappraise = 0
+        self.time_to_distract = 0
         self.time_equation_exponent = time_equation_exponent
 
     def step(self, action: int) -> tuple:
@@ -137,17 +138,19 @@ class EmotionEnv(gym.Env):
 
     def _disengage(self):
         old_intensity = self.agent_status.current_emo_intensity
-        new_intensity = self.agent_status.current_emo_intensity -self.disengage_benefit
+        new_intensity = self.agent_status.current_emo_intensity - self.disengage_benefit
         new_intensity = np.clip(new_intensity, 0, 10)
-        reward = (10 - new_intensity) * 9 + (10 - old_intensity)
+        self.time_to_distract = 1 + old_intensity * .25
+        reward = (10 - old_intensity) * self.time_to_distract + (10 - new_intensity) * (10 - self.time_to_distract)
         self.agent_status.current_emo_intensity -= self.disengage_benefit
         self.agent_status.current_emo_intensity = np.clip(self.agent_status.current_emo_intensity, 0, 10)
         return reward
 
     def _engage(self):
-        self.time_to_reappraise = 1 + (self.agent_status.current_emo_intensity ** self.time_equation_exponent) / (10**self.time_equation_exponent) * 9#(self.agent_status.current_emo_intensity ** self.time_equation_exponent) / (10 ** self.time_equation_exponent) * 10
+        old_intensity = self.agent_status.current_emo_intensity
+        self.time_to_reappraise = 1 + 0.9 * old_intensity if old_intensity > 5 else 1 + old_intensity * .25
+            #'(1 + self.agent_status.current_emo_intensity * 0.25) + (self.agent_status.current_emo_intensity ** self.time_equation_exponent) / (9 ** self.time_equation_exponent)
         if self.current_appraisal.resolvable:
-            old_intensity = self.agent_status.current_emo_intensity
             new_intensity = self.current_appraisal.emo_intensity - self.engage_benefit
             new_intensity = np.clip(new_intensity, 0, 10)
             reward = ((10 - old_intensity) * self.time_to_reappraise) + (10 - new_intensity) * (10 - self.time_to_reappraise)
@@ -156,7 +159,6 @@ class EmotionEnv(gym.Env):
             self.current_appraisal.reappraisal_counter += 1
         else:
             self.current_appraisal.reappraisal_counter += 1
-            old_intensity = self.agent_status.current_emo_intensity
             new_intensity = self.current_appraisal.emo_intensity - self.engage_adaptation * self.current_appraisal.reappraisal_counter
             new_intensity = np.clip(new_intensity, 0, 10)
             reward = (10 - old_intensity) * self.time_to_reappraise + (10 - new_intensity) * (10 - self.time_to_reappraise)

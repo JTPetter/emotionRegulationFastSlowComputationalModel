@@ -1,6 +1,7 @@
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+import torch
 import pandas as pd
 import path
 import os
@@ -8,7 +9,7 @@ import logging
 import sys
 
 from environment import Stimulus, AgentStatus, EmotionEnv
-from agent import QTableAgent
+from agent import QTableAgent, DQNAgent
 
 
 def bin_low_high(value):
@@ -29,16 +30,16 @@ logger.setLevel(logging.INFO)
 
 #Parameters for grid search
 grid_parameters = {
-    'N_STIMULI': [800],
+    'N_STIMULI': [400],
     'STIMULUS_MAX_OCCURRENCE': [5],
-    'alpha': [.1],
+    'alpha': [.01],
     'gamma': [.99],
     'epsilon': [1],
     'disengage_benefit': [2],
     'engage_benefit': [2],
     'engage_adaptation': [2],
-    'SEED': [np.arange(21, 51)],
-    'PERCENTAGE_RESOLVABLE_STIMULI': [.5]    # 0 to 1
+    'SEED': [1128],
+    'PERCENTAGE_RESOLVABLE_STIMULI': [0]    # 0 to 1
 }
 
 n_grid_parameters = len(grid_parameters)
@@ -48,24 +49,24 @@ grid = np.array(np.meshgrid(grid_parameters['N_STIMULI'], grid_parameters['STIMU
                             grid_parameters['PERCENTAGE_RESOLVABLE_STIMULI']))
 grid = grid.reshape(n_grid_parameters, int(grid.size/n_grid_parameters)).T
 
-file_name = "Reference_Phenomenon"      # the first part of the file name, automatically appended with the respective simulation value and data description
-                                    #DONT USE NUMBERS IN FILE NAME
-folder_path = "../datasets/Reference_PhenomenonPartTwo" + file_name   # where to save the data
-os.makedirs(folder_path)     # create a folder
+# file_name = "Reference_Phenomenon"      # the first part of the file name, automatically appended with the respective simulation value and data description
+#                                     #DONT USE NUMBERS IN FILE NAME
+# folder_path = "../datasets/Reference_PhenomenonPartTwo" + file_name   # where to save the data
+# os.makedirs(folder_path)     # create a folder
 
 for row in np.arange(0, len(grid)):
 
     SEED = int(grid[row, 8])
-    N_RUNS = 50000
+    N_RUNS = 50000  # runs for training
     N_STIMULI = int(grid[row, 0])
     N_ACTIONS = 2
-    N_STATES = 3
+    N_STATES = 11
     STIMULUS_MAX_OCCURRENCE = int(grid[row, 1])
     STIMULUS_INT_MIN = 1
     STIMULUS_INT_MAX = 10
     DECAY_TIME = N_RUNS * 1    # How much of the total run is used for exploring
     PERCENTAGE_RESOLVABLE_STIMULI = grid[row, 9]
-    TIME_EQUATION_EXPONENT = 2
+    TIME_EQUATION_EXPONENT = 4  # higher exponents lead to the curves separating later but more strongly
 
     alpha = grid[row, 2]
     gamma = grid[row, 3]
@@ -105,26 +106,30 @@ for row in np.arange(0, len(grid)):
                      )
     env.reset()
 
-    agent = QTableAgent(N_STATES, n_actions=N_ACTIONS, alpha=alpha, gamma=gamma, epsilon=epsilon)
+    agent = DQNAgent(1, n_actions=N_ACTIONS, alpha=alpha, gamma=gamma, epsilon=epsilon)
+    # agent = QTableAgent(N_STATES, n_actions=N_ACTIONS, alpha=alpha, gamma=gamma, epsilon=epsilon)
 
     action = 1 # the first action
-    state = bin_low_high(env.agent_status.current_emo_intensity)    #the first state
+    #state = bin_low_high(env.agent_status.current_emo_intensity)    #the first state
+    state = torch.tensor([env.agent_status.current_emo_intensity], dtype=torch.float32).unsqueeze(0)
 
     # Record actions and rewards
     action_counts = np.zeros((N_STATES, agent.n_actions))
     reward_counts = np.zeros((N_RUNS, agent.n_actions))
-    qTable_update_amount = []
+    # qTable_update_amount = []
 
     # Run Training
     for i in range(N_RUNS):
         next_state, reward, done, info = env.step(action)
-        next_state = bin_low_high(next_state)
+        next_state = torch.tensor([next_state], dtype=torch.float32).unsqueeze(0)
+        # previous_qTable_sum = agent.sum_of_q_values(range(STIMULUS_INT_MIN, STIMULUS_INT_MAX))
         agent.update(state, next_state, action, reward)
+        # qTable_update_amount.append(agent.sum_of_q_values(range(STIMULUS_INT_MIN, STIMULUS_INT_MAX)) - previous_qTable_sum)  # how much the qTable changed from the update
         logger.debug(f'action: {action}, reward: {reward}, step: {i}')
         if i % 100 == 0:
             print(row, '/', len(grid), '_____', round(i / (N_RUNS) * 100, 2) , '%', sep='')
-        state = bin_low_high(env.agent_status.current_emo_intensity)
-        action = agent.choose_action(state, policy="epsilon_greedy")
+        state = torch.tensor([env.agent_status.current_emo_intensity], dtype=torch.float32).unsqueeze(0)
+        action = agent.choose_action(state)
         if agent.epsilon > 0.1:   #cap epsilon at .1
             agent.epsilon -= DECAY_FACTOR
         #print(agent.qtable)
@@ -132,47 +137,50 @@ for row in np.arange(0, len(grid)):
 
     # Run Simulation
     agent.alpha = 0
+    env.reset()
     for i in range(10000):
         next_state, reward, done, info = env.step(action)
-        next_state = bin_low_high(next_state)
-        previous_qTable_sum = np.sum(agent.qtable)  # qTable values sum before updating
-        agent.update(state, next_state, action, reward)
-        qTable_update_amount.append(np.sum(agent.qtable) - previous_qTable_sum)  #how much the qTable changed from the update
+        next_state = torch.tensor([next_state], dtype=torch.float32).unsqueeze(0)
+        # next_state = bin_low_high(next_state)
+        # previous_qTable_sum = np.sum(agent.qtable)  # qTable values sum before updating
+        # agent.update(state, next_state, action, reward) # typicially you don't update in evaluation phase anymore
+        # qTable_update_amount.append(np.sum(agent.qtable) - previous_qTable_sum)  #how much the qTable changed from the update
         logger.debug(f'action: {action}, reward: {reward}, step: {i}')
         if i % 100 == 0:
             print(row, '/', len(grid), '_____', round(i / (N_RUNS) * 100, 2) , '%', sep='')
-        action_counts[state, action] += 1
-        reward_counts[i, action] += reward
-        state = bin_low_high(env.agent_status.current_emo_intensity)
-        action = agent.choose_action(state, policy="epsilon_greedy")
+        # reward_counts[i, action] += reward
+        state = torch.tensor([env.agent_status.current_emo_intensity], dtype=torch.float32).unsqueeze(0)
+        state_intensity = int(env.agent_status.current_emo_intensity)
+        action = agent.choose_action(state)
+        action_counts[state_intensity, action] += 1
 
 
 
     # Plot choices
-    states = np.arange(0, N_STATES)
-    plt.plot(states, action_counts[:, 0], marker='', color='blue', linewidth=2, label='disengage')
-    plt.plot(states, action_counts[:, 1], marker='', color='red', linewidth=2, label='engage')
+    states = np.arange(0, 11)
+    plt.plot(states, action_counts[:, 0], marker='', color='blue', linewidth=2, label='Distraction')
+    plt.plot(states, action_counts[:, 1], marker='', color='red', linewidth=2, label='Reappraisal')
     plt.ylim([0, np.max(action_counts)])
     plt.legend()
-    #plt.show()
+    plt.show()
+
+    #
+    # # # plot qTable update amount
+    # time = np.arange(0, N_RUNS)
+    # plt.plot(time, qTable_update_amount, marker='', color='olive', linewidth=2)
+    # plt.show()
 
 
-    # plot qTable update amount
-    time = np.arange(0, 10000)
-    plt.plot(time, qTable_update_amount, marker='', color='olive', linewidth=2)
-    #plt.show()
-
-
-
-    #set options for pandas
-    pd.set_option('display.max_columns', None)
-    pd.set_option('display.width', None)
-    pd.set_option('display.max_colwidth', None)
-
-
-    #to write the actions to csv
-    df1 = pd.DataFrame({'disengage': action_counts[:, 0], 'engage': action_counts[:, 1]})
-    file_name1 = folder_path + '/' + file_name + '_' + str(row) + '_actionPerIntensity' '.csv'
-    df1.to_csv(file_name1)
-
+    #
+    # #set options for pandas
+    # pd.set_option('display.max_columns', None)
+    # pd.set_option('display.width', None)
+    # pd.set_option('display.max_colwidth', None)
+    #
+    #
+    # #to write the actions to csv
+    # df1 = pd.DataFrame({'disengage': action_counts[:, 0], 'engage': action_counts[:, 1]})
+    # file_name1 = folder_path + '/' + file_name + '_' + str(row) + '_actionPerIntensity' '.csv'
+    # df1.to_csv(file_name1)
+    #
 
