@@ -1,7 +1,6 @@
 import numpy as np
 import random
 import matplotlib.pyplot as plt
-import torch
 import pandas as pd
 import path
 import os
@@ -9,7 +8,7 @@ import logging
 import sys
 
 from environment import Stimulus, AgentStatus, EmotionEnv
-from agent import QTableAgent, DQNAgent
+from agent import QTableAgent
 
 
 def bin_low_high(value):
@@ -31,15 +30,15 @@ logger.setLevel(logging.INFO)
 #Parameters for grid search
 grid_parameters = {
     'N_STIMULI': [400],
-    'STIMULUS_MAX_OCCURRENCE': [5],
-    'alpha': [.01],
+    'STIMULUS_MAX_OCCURRENCE': [3],
+    'alpha': [.1],
     'gamma': [.99],
     'epsilon': [1],
     'disengage_benefit': [2],
     'engage_benefit': [2],
-    'engage_adaptation': [2],
-    'SEED': [1128],
-    'PERCENTAGE_RESOLVABLE_STIMULI': [0]    # 0 to 1
+    'engage_adaptation': [1],
+    'SEED': [128],
+    'PERCENTAGE_RESOLVABLE_STIMULI': [0.5]    # 0 to 1
 }
 
 n_grid_parameters = len(grid_parameters)
@@ -66,7 +65,7 @@ for row in np.arange(0, len(grid)):
     STIMULUS_INT_MAX = 10
     DECAY_TIME = N_RUNS * 1    # How much of the total run is used for exploring
     PERCENTAGE_RESOLVABLE_STIMULI = grid[row, 9]
-    TIME_EQUATION_EXPONENT = 4  # higher exponents lead to the curves separating later but more strongly
+    TIME_EQUATION_EXPONENT = 2  # higher exponents lead to the curves separating later but more strongly
 
     alpha = grid[row, 2]
     gamma = grid[row, 3]
@@ -106,12 +105,12 @@ for row in np.arange(0, len(grid)):
                      )
     env.reset()
 
-    agent = DQNAgent(1, n_actions=N_ACTIONS, alpha=alpha, gamma=gamma, epsilon=epsilon)
+    agent = QTableAgent(11, n_actions=N_ACTIONS, alpha=alpha, gamma=gamma, epsilon=epsilon)
     # agent = QTableAgent(N_STATES, n_actions=N_ACTIONS, alpha=alpha, gamma=gamma, epsilon=epsilon)
 
     action = 1 # the first action
     #state = bin_low_high(env.agent_status.current_emo_intensity)    #the first state
-    state = torch.tensor([env.agent_status.current_emo_intensity], dtype=torch.float32).unsqueeze(0)
+    state = env.agent_status.current_emo_intensity
 
     # Record actions and rewards
     action_counts = np.zeros((N_STATES, agent.n_actions))
@@ -121,15 +120,15 @@ for row in np.arange(0, len(grid)):
     # Run Training
     for i in range(N_RUNS):
         next_state, reward, done, info = env.step(action)
-        next_state = torch.tensor([next_state], dtype=torch.float32).unsqueeze(0)
         # previous_qTable_sum = agent.sum_of_q_values(range(STIMULUS_INT_MIN, STIMULUS_INT_MAX))
+        #print(state, next_state, action, reward)
         agent.update(state, next_state, action, reward)
         # qTable_update_amount.append(agent.sum_of_q_values(range(STIMULUS_INT_MIN, STIMULUS_INT_MAX)) - previous_qTable_sum)  # how much the qTable changed from the update
         logger.debug(f'action: {action}, reward: {reward}, step: {i}')
         if i % 100 == 0:
             print(row, '/', len(grid), '_____', round(i / (N_RUNS) * 100, 2) , '%', sep='')
-        state = torch.tensor([env.agent_status.current_emo_intensity], dtype=torch.float32).unsqueeze(0)
-        action = agent.choose_action(state)
+        state = int(env.agent_status.current_emo_intensity)
+        action = agent.choose_action(state, 'epsilon_greedy')
         if agent.epsilon > 0.1:   #cap epsilon at .1
             agent.epsilon -= DECAY_FACTOR
         #print(agent.qtable)
@@ -137,10 +136,10 @@ for row in np.arange(0, len(grid)):
 
     # Run Simulation
     agent.alpha = 0
+    agent.epsilon = 0
     env.reset()
     for i in range(10000):
         next_state, reward, done, info = env.step(action)
-        next_state = torch.tensor([next_state], dtype=torch.float32).unsqueeze(0)
         # next_state = bin_low_high(next_state)
         # previous_qTable_sum = np.sum(agent.qtable)  # qTable values sum before updating
         # agent.update(state, next_state, action, reward) # typicially you don't update in evaluation phase anymore
@@ -149,9 +148,9 @@ for row in np.arange(0, len(grid)):
         if i % 100 == 0:
             print(row, '/', len(grid), '_____', round(i / (N_RUNS) * 100, 2) , '%', sep='')
         # reward_counts[i, action] += reward
-        state = torch.tensor([env.agent_status.current_emo_intensity], dtype=torch.float32).unsqueeze(0)
+        state = int(env.agent_status.current_emo_intensity)
         state_intensity = int(env.agent_status.current_emo_intensity)
-        action = agent.choose_action(state)
+        action = agent.choose_action(state, 'epsilon_greedy')
         action_counts[state_intensity, action] += 1
 
 
