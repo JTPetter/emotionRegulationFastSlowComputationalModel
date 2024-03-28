@@ -29,16 +29,16 @@ logger.setLevel(logging.INFO)
 
 #Parameters for grid search
 grid_parameters = {
-    'N_STIMULI': [400],
-    'STIMULUS_MAX_OCCURRENCE': [3],
+    'N_STIMULI': [800],
+    'STIMULUS_MAX_OCCURRENCE': [5],
     'alpha': [.1],
     'gamma': [.99],
     'epsilon': [1],
     'disengage_benefit': [2],
     'engage_benefit': [2],
-    'engage_adaptation': [1],
-    'SEED': [128],
-    'PERCENTAGE_RESOLVABLE_STIMULI': [0.5]    # 0 to 1
+    'engage_adaptation': [2],
+    'SEED': [12318],
+    'PERCENTAGE_RESOLVABLE_STIMULI': [.5]    # 0 to 1
 }
 
 n_grid_parameters = len(grid_parameters)
