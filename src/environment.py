@@ -1,9 +1,8 @@
 import numpy as np
-import random
 import copy
 
 import gym
-from gym.spaces import Discrete, Tuple, Box, Dict
+from gym.spaces import Discrete, Box, Dict
 
 
 class Stimulus:
@@ -36,7 +35,6 @@ class AgentStatus:
         self.current_emo_intensity = None
         self.expected_p_occurrence = None
         self.current_encounter_counter = 0
-        # self.previous_encounter = None
 
     def print_list(self):
         for i in range(len(self.stimuliAppraisals)):
@@ -119,13 +117,10 @@ class EmotionEnv(gym.Env):
             reward = self._disengage()
         elif action == 1:
             reward = self._engage()
-        # elif action == 0:
-        #     self._inaction()
         else:
             raise ValueError(f'Received invalid action {action} which is not part of the action space')
 
         info = None
-        #reward = self._get_reward()
 
         self.reset()
         self.refresh_stimuli_list()
@@ -140,7 +135,7 @@ class EmotionEnv(gym.Env):
         old_intensity = self.agent_status.current_emo_intensity
         new_intensity = self.agent_status.current_emo_intensity - self.disengage_benefit
         new_intensity = np.clip(new_intensity, 0, 10)
-        self.time_to_distract = 1 #+ old_intensity * .1
+        self.time_to_distract = 1 + old_intensity * .1
         reward = (10 - old_intensity) * self.time_to_distract + (10 - new_intensity) * (10 - self.time_to_distract)
         self.agent_status.current_emo_intensity -= self.disengage_benefit
         self.agent_status.current_emo_intensity = np.clip(self.agent_status.current_emo_intensity, 0, 10)
@@ -148,9 +143,7 @@ class EmotionEnv(gym.Env):
 
     def _engage(self):
         old_intensity = self.agent_status.current_emo_intensity
-        self.time_to_reappraise = 1 + (self.agent_status.current_emo_intensity ** self.time_equation_exponent) / (10**self.time_equation_exponent) * 9
-                                  #+ (self.agent_status.current_emo_intensity * 0.25) + (self.agent_status.current_emo_intensity ** self.time_equation_exponent) / (20)
-        # 1 + 0.9 * old_intensity if old_intensity >= 5 else 1 + old_intensity * .25
+        self.time_to_reappraise = 1 + (old_intensity * .2) + (old_intensity ** self.time_equation_exponent) / (10**self.time_equation_exponent) * (9-(old_intensity * .2))
         if self.current_appraisal.resolvable:
             new_intensity = self.current_appraisal.emo_intensity - self.engage_benefit
             new_intensity = np.clip(new_intensity, 0, 10)

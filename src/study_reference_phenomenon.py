@@ -37,7 +37,7 @@ grid_parameters = {
     'disengage_benefit': [2],
     'engage_benefit': [2],
     'engage_adaptation': [2],
-    'SEED': [12318],
+    'SEED': [134518],
     'PERCENTAGE_RESOLVABLE_STIMULI': [.5]    # 0 to 1
 }
 
@@ -90,8 +90,7 @@ for row in np.arange(0, len(grid)):
 
     p_sum = sum(stimulus.p_occurrence for stimulus in stimuli_list)
     for stimulus in stimuli_list:
-        stimulus.p_occurrence = stimulus.p_occurrence / p_sum
-
+        stimulus.p_occurrence /= p_sum
 
     agent_status = AgentStatus()
 
@@ -138,7 +137,7 @@ for row in np.arange(0, len(grid)):
     agent.alpha = 0
     agent.epsilon = 0
     env.reset()
-    for i in range(10000):
+    for i in range(50):
         next_state, reward, done, info = env.step(action)
         # next_state = bin_low_high(next_state)
         # previous_qTable_sum = np.sum(agent.qtable)  # qTable values sum before updating
