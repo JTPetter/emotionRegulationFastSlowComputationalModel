@@ -1,0 +1,168 @@
+import numpy as np
+import random
+import matplotlib.pyplot as plt
+import pandas as pd
+import path
+import os
+import logging
+import sys
+
+from environment import Stimulus, AgentStatus, EmotionEnv
+from agent import QTableAgent
+
+# Set up logging
+logger = logging.getLogger(__name__)
+stream_handler = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter('%(message)s')
+stream_handler.setFormatter(formatter)
+logger.addHandler(stream_handler)
+logger.setLevel(logging.INFO)
+
+#Parameters for grid search
+grid_parameters = {
+    'N_STIMULI': [800],
+    'STIMULUS_MAX_OCCURRENCE': [5],
+    'alpha': [.1],
+    'gamma': [.99],
+    'epsilon': [1],
+    'disengage_benefit': [2],
+    'engage_benefit_mean': [2],
+    'engage_benefit_sd': [.01],
+    'engage_adaptation_mean': [2],
+    'engage_adaptation_sd': [.01],
+    'SEED': [np.arange(51, 101)],
+    'PERCENTAGE_RESOLVABLE_STIMULI': [.5]    # 0 to 1
+}
+
+n_grid_parameters = len(grid_parameters)
+grid = np.array(np.meshgrid(grid_parameters['N_STIMULI'], grid_parameters['STIMULUS_MAX_OCCURRENCE'], grid_parameters['alpha'],
+                            grid_parameters['gamma'], grid_parameters['epsilon'], grid_parameters['disengage_benefit'],
+                            grid_parameters['engage_benefit_mean'], grid_parameters['engage_benefit_sd'],
+                            grid_parameters['engage_adaptation_mean'], grid_parameters['engage_adaptation_sd'],
+                            grid_parameters['SEED'], grid_parameters['PERCENTAGE_RESOLVABLE_STIMULI']))
+grid = grid.reshape(n_grid_parameters, int(grid.size/n_grid_parameters)).T
+
+file_name = "Distribution_effect_low_variance"      # the first part of the file name, automatically appended with the respective simulation value and data description
+                                    #DONT USE NUMBERS IN FILE NAME
+folder_path = "../datasets/Manuscript/" + file_name   # where to save the data
+os.makedirs(folder_path)     # create a folder
+
+for row in np.arange(0, len(grid)):
+
+    SEED = int(grid[row, 10])
+    N_RUNS = 20000  # runs for training
+    N_STIMULI = int(grid[row, 0])
+    N_ACTIONS = 2
+    N_STATES = 11
+    STIMULUS_MAX_OCCURRENCE = int(grid[row, 1])
+    STIMULUS_INT_MIN = 1
+    STIMULUS_INT_MAX = 10
+    DECAY_TIME = N_RUNS * 1    # How much of the total run is used for exploring
+    PERCENTAGE_RESOLVABLE_STIMULI = grid[row, 11]
+    TIME_EQUATION_EXPONENT = 2  # higher exponents lead to the curves separating later but more strongly
+
+    alpha = grid[row, 2]
+    gamma = grid[row, 3]
+    epsilon = grid[row, 4]
+    DECAY_FACTOR = epsilon/DECAY_TIME  # how much epsilon is lowered each step
+
+    disengage_benefit = grid[row, 5]
+    engage_benefit_mean = grid[row, 6]
+    engage_benefit_sd = grid[row, 7]
+    engage_adaptation_mean = grid[row, 8]
+    engage_adaptation_sd = grid[row, 9]
+
+
+    random.seed(SEED)
+    np.random.seed(SEED)
+
+    stimuli_list = []
+    resolvable_ids = np.random.choice(range(N_STIMULI), size=int(N_STIMULI * PERCENTAGE_RESOLVABLE_STIMULI),
+                                      replace=False)
+    for i in range(N_STIMULI):
+        id = i
+        emo_intensity = np.random.randint(STIMULUS_INT_MIN, STIMULUS_INT_MAX + 1)
+        p_occurrence = np.random.uniform(0, 1, 1)
+        stimuli_list.append(Stimulus(id=id, emo_intensity=emo_intensity, p_occurrence=p_occurrence, resolvable=(i in resolvable_ids)))
+
+    p_sum = sum(stimulus.p_occurrence for stimulus in stimuli_list)
+    for stimulus in stimuli_list:
+        stimulus.p_occurrence /= p_sum
+
+    agent_status = AgentStatus()
+
+
+    engage_benefit = np.random.normal(engage_benefit_mean, engage_benefit_sd, 1)
+    engage_adaptation = np.random.normal(engage_adaptation_mean, engage_adaptation_sd, 1)
+    env = EmotionEnv(engage_benefit=engage_benefit,
+                     disengage_benefit=disengage_benefit,
+                     engage_adaptation=engage_adaptation,
+                     stimulus_max_occurrence=STIMULUS_MAX_OCCURRENCE,
+                     stimuli=stimuli_list,
+                     agent_status=agent_status,
+                     time_equation_exponent=TIME_EQUATION_EXPONENT
+                     )
+    env.reset()
+
+    agent = QTableAgent(11, n_actions=N_ACTIONS, alpha=alpha, gamma=gamma, epsilon=epsilon)
+
+    action = 1 # the first action
+    state = env.agent_status.current_emo_intensity
+
+    # Run Training
+    for i in range(N_RUNS):
+        next_state, reward, done, info = env.step(action)
+        agent.update(state, next_state, action, reward)
+        engage_benefit = np.random.normal(engage_benefit_mean, engage_benefit_sd, 1) # Sample a new engage benefit and engage adaptation after each step
+        engage_adaptation = np.random.normal(engage_adaptation_mean, engage_adaptation_sd, 1)
+        env.engage_benefit = engage_benefit
+        env.engage_adaptation = engage_adaptation
+        logger.debug(f'action: {action}, reward: {reward}, step: {i}')
+        if i % 100 == 0:
+            print(row, '/', len(grid), '_____', round(i / (N_RUNS) * 100, 2) , '%', sep='')
+        state = int(env.agent_status.current_emo_intensity)
+        action = agent.choose_action(state, 'epsilon_greedy')
+        if agent.epsilon > 0.1:   #cap epsilon at .1
+            agent.epsilon -= DECAY_FACTOR
+
+
+
+    # Record actions and rewards
+    action_counts = np.zeros((N_STATES, agent.n_actions))
+    reward_counts = np.zeros((N_RUNS, agent.n_actions))
+
+    # Run Simulation
+    agent.alpha = 0
+    agent.epsilon = 0
+    env.reset()
+    for i in range(50):
+        next_state, reward, done, info = env.step(action)
+        logger.debug(f'action: {action}, reward: {reward}, step: {i}')
+        if i % 100 == 0:
+            print(row, '/', len(grid), '_____', round(i / (N_RUNS) * 100, 2), '%', sep='')
+        state = int(env.agent_status.current_emo_intensity)
+        state_intensity = int(env.agent_status.current_emo_intensity)
+        action = agent.choose_action(state, 'epsilon_greedy')
+        action_counts[state_intensity, action] += 1
+
+
+
+    # # # Plot choices
+    # states = np.arange(0, 11)
+    # plt.plot(states, action_counts[:, 0], marker='', color='blue', linewidth=2, label='Distraction')
+    # plt.plot(states, action_counts[:, 1], marker='', color='red', linewidth=2, label='Reappraisal')
+    # plt.ylim([0, np.max(action_counts)])
+    # plt.legend()
+    # plt.show()
+
+    #set options for pandas
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.width', None)
+    pd.set_option('display.max_colwidth', None)
+
+
+    #to write the actions to csv
+    df1 = pd.DataFrame({'disengage': action_counts[:, 0], 'engage': action_counts[:, 1]})
+    file_name1 = folder_path + '/' + file_name + '_' + str(row) + '_actionPerIntensity' '.csv'
+    df1.to_csv(file_name1)
+

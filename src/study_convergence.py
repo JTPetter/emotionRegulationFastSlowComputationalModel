@@ -28,7 +28,7 @@ grid_parameters = {
     'disengage_benefit': [2],
     'engage_benefit': [2],
     'engage_adaptation': [2],
-    'SEED': [np.arange(50, 101)],
+    'SEED': [np.arange(89, 101)],
     'PERCENTAGE_RESOLVABLE_STIMULI': [.5]    # 0 to 1
 }
 
@@ -39,7 +39,7 @@ grid = np.array(np.meshgrid(grid_parameters['N_STIMULI'], grid_parameters['STIMU
                             grid_parameters['PERCENTAGE_RESOLVABLE_STIMULI']))
 grid = grid.reshape(n_grid_parameters, int(grid.size/n_grid_parameters)).T
 
-file_name = "convergence_study"      # the first part of the file name, automatically appended with the respective simulation value and data description
+file_name = "convergence_studyPartTwo"      # the first part of the file name, automatically appended with the respective simulation value and data description
                                     #DONT USE NUMBERS IN FILE NAME
 folder_path = "../datasets/Manuscript/" + file_name   # where to save the data
 os.makedirs(folder_path)     # create a folder

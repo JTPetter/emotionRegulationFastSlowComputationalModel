@@ -10,15 +10,6 @@ import sys
 from environment_no_ST import Stimulus, AgentStatus, EmotionEnv
 from agent import QTableAgent
 
-
-def bin_low_high(value):
-    if value > 5:
-        return 2
-    elif value > 0:
-        return 1
-    else:
-        return 0
-
 # Set up logging
 logger = logging.getLogger(__name__)
 stream_handler = logging.StreamHandler(sys.stdout)
@@ -37,7 +28,7 @@ grid_parameters = {
     'disengage_benefit': [2],
     'engage_benefit': [2],
     'engage_adaptation': [2],
-    'SEED': [np.arange(21, 51)],
+    'SEED': [np.arange(51, 101)],
     'PERCENTAGE_RESOLVABLE_STIMULI': [.5]    # 0 to 1
 }
 
@@ -48,24 +39,24 @@ grid = np.array(np.meshgrid(grid_parameters['N_STIMULI'], grid_parameters['STIMU
                             grid_parameters['PERCENTAGE_RESOLVABLE_STIMULI']))
 grid = grid.reshape(n_grid_parameters, int(grid.size/n_grid_parameters)).T
 
-file_name = "Theory_no_ST"      # the first part of the file name, automatically appended with the respective simulation value and data description
+file_name = "no_ST_differences"      # the first part of the file name, automatically appended with the respective simulation value and data description
                                     #DONT USE NUMBERS IN FILE NAME
-folder_path = "../datasets/PartTwo" + file_name   # where to save the data
+folder_path = "../datasets/Manuscript/" + file_name   # where to save the data
 os.makedirs(folder_path)     # create a folder
 
 for row in np.arange(0, len(grid)):
 
     SEED = int(grid[row, 8])
-    N_RUNS = 50000
+    N_RUNS = 50000  # runs for training
     N_STIMULI = int(grid[row, 0])
     N_ACTIONS = 2
-    N_STATES = 3
+    N_STATES = 11
     STIMULUS_MAX_OCCURRENCE = int(grid[row, 1])
     STIMULUS_INT_MIN = 1
     STIMULUS_INT_MAX = 10
     DECAY_TIME = N_RUNS * 1    # How much of the total run is used for exploring
     PERCENTAGE_RESOLVABLE_STIMULI = grid[row, 9]
-    TIME_EQUATION_EXPONENT = 2
+    TIME_EQUATION_EXPONENT = 2  # higher exponents lead to the curves separating later but more strongly
 
     alpha = grid[row, 2]
     gamma = grid[row, 3]
@@ -90,8 +81,7 @@ for row in np.arange(0, len(grid)):
 
     p_sum = sum(stimulus.p_occurrence for stimulus in stimuli_list)
     for stimulus in stimuli_list:
-        stimulus.p_occurrence = stimulus.p_occurrence / p_sum
-
+        stimulus.p_occurrence /= p_sum
 
     agent_status = AgentStatus()
 
@@ -105,64 +95,52 @@ for row in np.arange(0, len(grid)):
                      )
     env.reset()
 
-    agent = QTableAgent(N_STATES, n_actions=N_ACTIONS, alpha=alpha, gamma=gamma, epsilon=epsilon)
+    agent = QTableAgent(11, n_actions=N_ACTIONS, alpha=alpha, gamma=gamma, epsilon=epsilon)
 
     action = 1 # the first action
-    state = bin_low_high(env.agent_status.current_emo_intensity)    #the first state
-
-    # Record actions and rewards
-    action_counts = np.zeros((N_STATES, agent.n_actions))
-    reward_counts = np.zeros((N_RUNS, agent.n_actions))
-    qTable_update_amount = []
+    state = env.agent_status.current_emo_intensity
 
     # Run Training
     for i in range(N_RUNS):
         next_state, reward, done, info = env.step(action)
-        next_state = bin_low_high(next_state)
         agent.update(state, next_state, action, reward)
         logger.debug(f'action: {action}, reward: {reward}, step: {i}')
         if i % 100 == 0:
             print(row, '/', len(grid), '_____', round(i / (N_RUNS) * 100, 2) , '%', sep='')
-        state = bin_low_high(env.agent_status.current_emo_intensity)
-        action = agent.choose_action(state, policy="epsilon_greedy")
+        state = int(env.agent_status.current_emo_intensity)
+        action = agent.choose_action(state, 'epsilon_greedy')
         if agent.epsilon > 0.1:   #cap epsilon at .1
             agent.epsilon -= DECAY_FACTOR
-        #print(agent.qtable)
 
+
+
+    # Record actions and rewards
+    action_counts = np.zeros((N_STATES, agent.n_actions))
+    reward_counts = np.zeros((N_RUNS, agent.n_actions))
 
     # Run Simulation
     agent.alpha = 0
-    for i in range(10000):
+    agent.epsilon = 0
+    env.reset()
+    for i in range(50):
         next_state, reward, done, info = env.step(action)
-        next_state = bin_low_high(next_state)
-        previous_qTable_sum = np.sum(agent.qtable)  # qTable values sum before updating
-        agent.update(state, next_state, action, reward)
-        qTable_update_amount.append(np.sum(agent.qtable) - previous_qTable_sum)  #how much the qTable changed from the update
         logger.debug(f'action: {action}, reward: {reward}, step: {i}')
         if i % 100 == 0:
-            print(row, '/', len(grid), '_____', round(i / (N_RUNS) * 100, 2) , '%', sep='')
-        action_counts[state, action] += 1
-        reward_counts[i, action] += reward
-        state = bin_low_high(env.agent_status.current_emo_intensity)
-        action = agent.choose_action(state, policy="epsilon_greedy")
+            print(row, '/', len(grid), '_____', round(i / (N_RUNS) * 100, 2), '%', sep='')
+        state = int(env.agent_status.current_emo_intensity)
+        state_intensity = int(env.agent_status.current_emo_intensity)
+        action = agent.choose_action(state, 'epsilon_greedy')
+        action_counts[state_intensity, action] += 1
 
 
 
-    # Plot choices
-    states = np.arange(0, N_STATES)
-    plt.plot(states, action_counts[:, 0], marker='', color='blue', linewidth=2, label='disengage')
-    plt.plot(states, action_counts[:, 1], marker='', color='red', linewidth=2, label='engage')
-    plt.ylim([0, np.max(action_counts)])
-    plt.legend()
-    #plt.show()
-
-
-    # plot qTable update amount
-    time = np.arange(0, 10000)
-    plt.plot(time, qTable_update_amount, marker='', color='olive', linewidth=2)
-    #plt.show()
-
-
+    # # Plot choices
+    # states = np.arange(0, 11)
+    # plt.plot(states, action_counts[:, 0], marker='', color='blue', linewidth=2, label='Distraction')
+    # plt.plot(states, action_counts[:, 1], marker='', color='red', linewidth=2, label='Reappraisal')
+    # plt.ylim([0, np.max(action_counts)])
+    # plt.legend()
+    # plt.show()
 
     #set options for pandas
     pd.set_option('display.max_columns', None)
@@ -174,5 +152,4 @@ for row in np.arange(0, len(grid)):
     df1 = pd.DataFrame({'disengage': action_counts[:, 0], 'engage': action_counts[:, 1]})
     file_name1 = folder_path + '/' + file_name + '_' + str(row) + '_actionPerIntensity' '.csv'
     df1.to_csv(file_name1)
-
 

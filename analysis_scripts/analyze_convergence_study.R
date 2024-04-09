@@ -2,20 +2,21 @@ library("tidyverse")
 
 
 # load data 
-path <- "../datasets/Convergence_Study/"
+path <- "../datasets/Manuscript/convergence_study/"
 all_file_names <- list.files(path)
 
 all_datasets <- list()
 for (i in 1:length(all_file_names)) {
   file_location <- paste0(path, all_file_names[i])
   dataset <- as.data.frame(read.csv(file_location))
+  dataset <- dataset["Q_delta"] # only need this col
   all_datasets[[i]] <- dataset
 }
 
 # arrange as data.frame
 all_dfs <- all_datasets[[1]]
 for(i in 2:length(all_datasets)) {
-  all_dfs <- cbind(all_dfs, all_datasets[[i]]$delta)  
+  all_dfs <- cbind(all_dfs, all_datasets[[i]]$Q_delta)  
 }
 
 #only absolute values 

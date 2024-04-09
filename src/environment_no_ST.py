@@ -1,9 +1,8 @@
 import numpy as np
-import random
 import copy
 
 import gym
-from gym.spaces import Discrete, Tuple, Box, Dict
+from gym.spaces import Discrete, Box, Dict
 
 
 class Stimulus:
@@ -36,7 +35,6 @@ class AgentStatus:
         self.current_emo_intensity = None
         self.expected_p_occurrence = None
         self.current_encounter_counter = 0
-        # self.previous_encounter = None
 
     def print_list(self):
         for i in range(len(self.stimuliAppraisals)):
@@ -100,6 +98,7 @@ class EmotionEnv(gym.Env):
         self.replacement_stimulus_counter = 0
         self.stimulus_max_occurrence = stimulus_max_occurrence
         self.time_to_reappraise = 0
+        self.time_to_distract = 0
         self.time_equation_exponent = time_equation_exponent
 
     def step(self, action: int) -> tuple:
@@ -118,13 +117,10 @@ class EmotionEnv(gym.Env):
             reward = self._disengage()
         elif action == 1:
             reward = self._engage()
-        # elif action == 0:
-        #     self._inaction()
         else:
             raise ValueError(f'Received invalid action {action} which is not part of the action space')
 
         info = None
-        #reward = self._get_reward()
 
         self.reset()
         self.refresh_stimuli_list()
@@ -137,17 +133,18 @@ class EmotionEnv(gym.Env):
 
     def _disengage(self):
         old_intensity = self.agent_status.current_emo_intensity
-        new_intensity = self.agent_status.current_emo_intensity -self.disengage_benefit
+        new_intensity = self.agent_status.current_emo_intensity - self.disengage_benefit
         new_intensity = np.clip(new_intensity, 0, 10)
-        reward = (10 - new_intensity) * 9 + (10 - old_intensity)
+        self.time_to_distract = 1 + old_intensity * .1
+        reward = (10 - old_intensity) * self.time_to_distract + (10 - new_intensity) * (10 - self.time_to_distract)
         self.agent_status.current_emo_intensity -= self.disengage_benefit
         self.agent_status.current_emo_intensity = np.clip(self.agent_status.current_emo_intensity, 0, 10)
         return reward
 
     def _engage(self):
-        self.time_to_reappraise = 1#(self.agent_status.current_emo_intensity ** self.time_equation_exponent) / (10 ** self.time_equation_exponent) * 10
+        old_intensity = self.agent_status.current_emo_intensity
+        self.time_to_reappraise = 1 + old_intensity * .1
         if self.current_appraisal.resolvable:
-            old_intensity = self.agent_status.current_emo_intensity
             new_intensity = self.current_appraisal.emo_intensity - self.engage_benefit
             new_intensity = np.clip(new_intensity, 0, 10)
             reward = ((10 - old_intensity) * self.time_to_reappraise) + (10 - new_intensity) * (10 - self.time_to_reappraise)
@@ -156,7 +153,6 @@ class EmotionEnv(gym.Env):
             self.current_appraisal.reappraisal_counter += 1
         else:
             self.current_appraisal.reappraisal_counter += 1
-            old_intensity = self.agent_status.current_emo_intensity
             new_intensity = self.current_appraisal.emo_intensity - self.engage_adaptation * self.current_appraisal.reappraisal_counter
             new_intensity = np.clip(new_intensity, 0, 10)
             reward = (10 - old_intensity) * self.time_to_reappraise + (10 - new_intensity) * (10 - self.time_to_reappraise)
@@ -188,7 +184,7 @@ class EmotionEnv(gym.Env):
     def get_original_intensity(self, stimulus_id):
         for i in range(0, len(self.agent_status.stimuliAppraisals)):
             if self.agent_status.stimuliAppraisals[i].id == stimulus_id:
-                return self.agent_status.stimuliAppraisals[i].emo_intensity
+                return int(self.agent_status.stimuliAppraisals[i].emo_intensity)
 
     def render(self, mode='human'):
         '''
